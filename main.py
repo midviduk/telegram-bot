@@ -32,4 +32,4 @@ while True:
         if link not in sent_items:
             bot.send_message(CHAT_ID, f"{brand.upper()} — {price} грн\n{link}")
             sent_items.add(link)
-    time.sleep(300)  # перевірка кожні 15 хвилин
+    time.sleep(300)  # перевірка кожні 5 хвилин
