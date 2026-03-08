@@ -11,6 +11,7 @@ bot = telebot.TeleBot(TOKEN)
 def get_items():
     brands = ["uniqlo", "cos", "arket"]
     items = []
+    print(items)
     for brand in brands:
         url = f"https://shafa.ua/uk/women?search={brand}"
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
