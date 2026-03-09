@@ -1,75 +1,85 @@
 import time
-import telebot
-from bs4 import BeautifulSoup
+import json
+import os
 import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+import telebot
 
-# =================== Налаштування ===================
-TOKEN = "тут_твій_токен_бота"
-CHAT_ID = "твоє_число_ID"
+# ====== Налаштування бота ======
+TOKEN = "ТУТ_ВСТАВ_СВІЙ_BOT_TOKEN"
+CHAT_ID_FILE = "my_chat_id.txt"
+
+if os.path.exists(CHAT_ID_FILE):
+    with open(CHAT_ID_FILE, "r") as f:
+        CHAT_ID = int(f.read().strip())
+else:
+    CHAT_ID = None
+
 bot = telebot.TeleBot(TOKEN)
 
-brands = ["uniqlo", "cos", "arket"]  # бренди, за якими шукаємо
-sent_links = set()  # щоб не надсилати дублікати
+# ====== Автоотримання CHAT_ID ======
+if CHAT_ID is None:
+    print("Відправ свій ID у бот у Telegram...")
+    updates = bot.get_updates()
+    if updates:
+        CHAT_ID = updates[-1].message.chat.id
+        with open(CHAT_ID_FILE, "w") as f:
+            f.write(str(CHAT_ID))
+        bot.send_message(CHAT_ID, "Бот запустився ✅")
+    else:
+        print("Надішли будь-яке повідомлення боту у Telegram і перезапусти контейнер")
+        exit()
 
-bot.send_message(CHAT_ID, "Бот запустився і ловитиме нові товари <2000 грн")
+# ====== Налаштування Shafa ======
+BRANDS = ["uniqlo", "cos", "arket"]
+URL_TEMPLATE = "https://shafa.ua/{brand}?page={page}"
 
-# =================== Headless Chrome ===================
+# Файл для збереження вже надісланих позицій
+SENT_FILE = "sent_items.json"
+if os.path.exists(SENT_FILE):
+    with open(SENT_FILE, "r", encoding="utf-8") as f:
+        sent_items = set(json.load(f))
+else:
+    sent_items = set()
+
+# ====== Запуск Chrome ======
 options = uc.ChromeOptions()
 options.headless = True
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
 driver = uc.Chrome(options=options)
 
-# =================== Функція перевірки ===================
-def check_items():
-    for brand in brands:
-        url = f"https://shafa.ua/uk/clothes?search={brand}"
+def fetch_items():
+    new_items = []
+    for brand in BRANDS:
+        url = URL_TEMPLATE.format(brand=brand, page=1)
         driver.get(url)
-        time.sleep(5)  # чекаємо, поки JS підвантажить товари
+        time.sleep(3)
 
-        soup = BeautifulSoup(driver.page_source, "html.parser")
-        product_cards = soup.find_all("div", {"data-testid": "ProductCard"})
-
-        for card in product_cards:
-            a_tag = card.find("a", href=True)
-            if not a_tag:
-                continue
-            full_link = "https://shafa.ua" + a_tag["href"]
-            if full_link in sent_links:
-                continue
-
-            # Назва
-            title_tag = card.find("div", {"data-testid": "ProductTitle"})
-            title = title_tag.get_text() if title_tag else "Назва відсутня"
-
-            # Ціна
-            price_tag = card.find("div", {"data-testid": "Price"})
-            if not price_tag:
-                continue
-            price_text = price_tag.get_text().replace("грн", "").replace(" ", "")
+        products = driver.find_elements(By.CSS_SELECTOR, "div.catalog-tile__inner")
+        for p in products:
             try:
-                price = int(price_text)
+                name = p.find_element(By.CSS_SELECTOR, "a.catalog-tile__title").text.strip()
+                price_text = p.find_element(By.CSS_SELECTOR, "span.catalog-tile__price-value").text.strip()
+                price = int(price_text.replace("₴", "").replace(",", "").strip())
+                link = p.find_element(By.CSS_SELECTOR, "a.catalog-tile__title").get_attribute("href")
+                uid = link.split("/")[-1]
+
+                if uid not in sent_items and price < 2000:
+                    new_items.append((name, price, link))
+                    sent_items.add(uid)
             except:
                 continue
-            if price > 2000:
-                continue
+    return new_items
 
-            # Фото
-            img_tag = card.find("img")
-            img_url = img_tag["src"] if img_tag else None
-
-            msg = f"{brand.upper()} | {title} | {price} грн\n{full_link}"
-            if img_url:
-                bot.send_photo(CHAT_ID, img_url, caption=msg)
-            else:
-                bot.send_message(CHAT_ID, msg)
-
-            sent_links.add(full_link)
-
-# =================== Цикл перевірки ===================
-while True:
-    try:
-        check_items()
-    except Exception as e:
-        print("Помилка:", e)
-    time.sleep(30)  # перевірка кожні 30 секунд
+# ====== Основний цикл ======
+try:
+    while True:
+        items = fetch_items()
+        if items:
+            for name, price, link in items:
+                bot.send_message(CHAT_ID, f"{name} — {price}₴\n{link}")
+            with open(SENT_FILE, "w", encoding="utf-8") as f:
+                json.dump(list(sent_items), f, ensure_ascii=False)
+        time.sleep(60)
+except KeyboardInterrupt:
+    driver.quit()
+    bot.send_message(CHAT_ID, "Бот зупинений ✋")
