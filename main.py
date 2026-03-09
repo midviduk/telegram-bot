@@ -1,57 +1,72 @@
 import requests
 from bs4 import BeautifulSoup
-from telegram import Bot, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, JobQueue
 
-# Твій Telegram токен
-TOKEN = "8206782935:AAEk10Lu_RbcyHrPgNA5OWuUJbL7jgcgjvE"
+# ----------------------
+# Налаштування бота
+# ----------------------
+TOKEN = "ВАШ_TELEGRAM_BOT_TOKEN"  # <-- встав сюди свій токен
+CHAT_ID = "ВАШ_CHAT_ID"           # <-- ID чату куди надсилати повідомлення
 
+# ----------------------
+# Листи для відстеження
+# ----------------------
+last_seen = {
+    "uniqlo": set(),
+    "cos": set(),
+    "arket": set()
+}
 
-# Базова URL Shafa
-BASE_URL = "https://shafa.ua/search?search_text={query}&brand_name=Uniqlo"
+# ----------------------
+# Функція для перевірки нових товарів
+# ----------------------
+async def check_new_items(context: ContextTypes.DEFAULT_TYPE):
+    urls = {
+        "uniqlo": "https://shafa.ua/uk/uniqlo",
+        "cos": "https://shafa.ua/uk/cos",
+        "arket": "https://shafa.ua/uk/arket"
+    }
+    
+    for brand, url in urls.items():
+        try:
+            resp = requests.get(url)
+            soup = BeautifulSoup(resp.text, "html.parser")
+            
+            # Всі товари на сторінці
+            items = soup.select("div.catalog-product-card__name")  
+            new_items = []
+            
+            for item in items:
+                name = item.get_text(strip=True)
+                if name not in last_seen[brand]:
+                    last_seen[brand].add(name)
+                    new_items.append(name)
+            
+            # Надсилаємо нові товари у Telegram
+            for name in new_items:
+                await context.bot.send_message(chat_id=CHAT_ID, text=f"{brand.upper()}: {name}")
+        
+        except Exception as e:
+            print(f"Помилка при перевірці {brand}: {e}")
 
+# ----------------------
+# Команда /start
+# ----------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привіт! Надішли мені назву товару від Uniqlo, Cos чи Arket.")
+    await update.message.reply_text("Привіт! Бот запущено і перевіряє нові товари кожні 2 хвилини.")
 
-async def search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = " ".join(context.args)
-    if not query:
-        await update.message.reply_text("Введи назву товару після команди /search")
-        return
-
-    url = BASE_URL.format(query=query.replace(" ", "+"))
-    response = requests.get(url)
-    if response.status_code != 200:
-        await update.message.reply_text("Не вдалося отримати дані з Shafa")
-        return
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    items = soup.select("div.catalog__item")[:5]  # беремо максимум 5 результатів
-
-    if not items:
-        await update.message.reply_text("Не знайдено товарів 😢")
-        return
-
-    messages = []
-    for item in items:
-        title_tag = item.select_one("a.catalog__item-name")
-        price_tag = item.select_one("span.catalog__price")
-        link_tag = title_tag.get("href") if title_tag else None
-
-        title = title_tag.get_text(strip=True) if title_tag else "Без назви"
-        price = price_tag.get_text(strip=True) if price_tag else "Ціна невідома"
-        link = f"https://shafa.ua{link_tag}" if link_tag else "Посилання відсутнє"
-
-        messages.append(f"{title}\n{price}\n{link}")
-
-    await update.message.reply_text("\n\n".join(messages))
-
+# ----------------------
+# Запуск бота
+# ----------------------
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
-
+    
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("search", search))
-
-    print("Бот запущений...")
+    
+    # Запускаємо перевірку кожні 2 хвилини
+    job_queue: JobQueue = app.job_queue
+    job_queue.run_repeating(check_new_items, interval=120, first=5)  # 120 сек = 2 хв
+    
+    print("Бот запущено!")
     app.run_polling()
-  
