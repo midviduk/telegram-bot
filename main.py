@@ -1,47 +1,55 @@
 import asyncio
+import requests
+from bs4 import BeautifulSoup
 from telegram import Bot
 from telegram.ext import ApplicationBuilder
 
-# Токен твого бота
-TOKEN = "8206782935:AAEk10Lu_RbcyHrPgNA5OWuUJbL7jgcgjvE"
-CHAT_ID = 313800446
+# ----- Налаштування -----
+TOKEN = "тут_твій_токен_бота"  # твій Telegram токен
+CHAT_ID = 313800446             # твій chat_id
+CHECK_INTERVAL = 120            # інтервал перевірки в секундах
 
-# Список брендів — тільки Uniqlo
-BRANDS = ["Uniqlo"]
+# URL для Uniqlo на Shafa.ua
+URL = "https://shafa.ua/ua/brand-uniqlo"
 
-# Приклад функції, яка перевіряє нові товари
+# Тут будемо зберігати посилання на вже надіслані товари
+sent_items = set()
+
+# ----- Функція перевірки -----
 async def check_new_items(app):
-    # Тут вставляй свій код парсера з Shafa
-    # Для прикладу — список нових товарів
-    items = [
-        "Uniqlo Червона сорочка",
-        "Cos Синя сумка",
-        "Arket Джинси",
-        "Uniqlo Світшот"
-    ]
+    try:
+        response = requests.get(URL)
+        soup = BeautifulSoup(response.text, "html.parser")
 
-    for item_name in items:
-        if "uniqlo" in item_name.lower():
-            await app.bot.send_message(chat_id=CHAT_ID, text=f"Знайдено новий товар Uniqlo: {item_name}")
-            print(f"Надіслано повідомлення: {item_name}")
+        # Знаходимо всі товари на сторінці
+        items = soup.select("a.item-card")  # залежить від HTML Shafa, може бути "a.card-link" тощо
 
+        for item in items:
+            title = item.get_text(strip=True)
+            link = "https://shafa.ua" + item.get("href")
+
+            # Надсилаємо тільки нові товари
+            if link not in sent_items:
+                sent_items.add(link)
+                message = f"Знайдено новий товар Uniqlo: {title}\nПосилання: {link}"
+                await app.bot.send_message(chat_id=CHAT_ID, text=message)
+                print(f"Відправлено: {title}")
+
+    except Exception as e:
+        print("Помилка при перевірці:", e)
+
+# ----- Головна функція -----
 async def main():
-    # Створюємо додаток бота
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Перша перевірка відразу при запуску
+    # Перша перевірка відразу
     await check_new_items(app)
 
-    # JobQueue для повторної перевірки кожні 120 секунд (2 хв)
-    app.job_queue.run_repeating(check_new_items, interval=120, first=120)
+    # Перевірка кожні 2 хвилини
+    while True:
+        await asyncio.sleep(CHECK_INTERVAL)
+        await check_new_items(app)
 
-    print("Бот запущено, перевірка Uniqlo кожні 2 хвилини...")
-    
-    # Запускаємо бота
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await asyncio.Event().wait()  # Зупиняє програму, бот працює постійно
-
+# ----- Запуск -----
 if __name__ == "__main__":
     asyncio.run(main())
