@@ -4,11 +4,11 @@ from bs4 import BeautifulSoup
 from telegram import Bot
 from telegram.ext import ApplicationBuilder, ContextTypes
 
-TOKEN = "твій_токен_сюди"  # <- твій Telegram токен
-CHAT_ID = 313800446         # <- твій chat_id
+# ✅ Токен і chat_id вставлено
+TOKEN = "8206782935:AAEk10Lu_RbcyHrPgNA5OWuUJbL7jgcgjvE"
+CHAT_ID = 313800446
 URL = "https://shafa.ua/ua/brand-uniqlo"
 
-# Список вже відправлених товарів
 sent_items = set()
 
 async def check_new_items(app):
@@ -16,8 +16,7 @@ async def check_new_items(app):
     response = requests.get(URL)
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # Правильний селектор для лінків на товари
-    items = soup.select("a.card-link")  
+    items = soup.select("a.card-link")
 
     for item in items:
         title = item.get_text(strip=True)
