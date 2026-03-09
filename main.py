@@ -2,54 +2,47 @@ import asyncio
 import requests
 from bs4 import BeautifulSoup
 from telegram import Bot
-from telegram.ext import ApplicationBuilder
+from telegram.ext import ApplicationBuilder, ContextTypes
 
-# ----- Налаштування -----
-TOKEN = "тут_твій_токен_бота"  # твій Telegram токен
-CHAT_ID = 313800446             # твій chat_id
-CHECK_INTERVAL = 120            # інтервал перевірки в секундах
-
-# URL для Uniqlo на Shafa.ua
+TOKEN = "твій_токен_сюди"  # <- твій Telegram токен
+CHAT_ID = 313800446         # <- твій chat_id
 URL = "https://shafa.ua/ua/brand-uniqlo"
 
-# Тут будемо зберігати посилання на вже надіслані товари
+# Список вже відправлених товарів
 sent_items = set()
 
-# ----- Функція перевірки -----
 async def check_new_items(app):
-    try:
-        response = requests.get(URL)
-        soup = BeautifulSoup(response.text, "html.parser")
+    global sent_items
+    response = requests.get(URL)
+    soup = BeautifulSoup(response.text, "html.parser")
 
-        # Знаходимо всі товари на сторінці
-        items = soup.select("a.item-card")  # залежить від HTML Shafa, може бути "a.card-link" тощо
+    # Правильний селектор для лінків на товари
+    items = soup.select("a.card-link")  
 
-        for item in items:
-            title = item.get_text(strip=True)
-            link = "https://shafa.ua" + item.get("href")
+    for item in items:
+        title = item.get_text(strip=True)
+        link = "https://shafa.ua" + item.get("href")
 
-            # Надсилаємо тільки нові товари
-            if link not in sent_items:
-                sent_items.add(link)
-                message = f"Знайдено новий товар Uniqlo: {title}\nПосилання: {link}"
-                await app.bot.send_message(chat_id=CHAT_ID, text=message)
-                print(f"Відправлено: {title}")
+        if link not in sent_items:
+            sent_items.add(link)
+            print(f"Надсилаємо новий товар: {title} -> {link}")
+            await app.bot.send_message(chat_id=CHAT_ID, text=f"{title}\n{link}")
 
-    except Exception as e:
-        print("Помилка при перевірці:", e)
-
-# ----- Головна функція -----
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
-
-    # Перша перевірка відразу
+    await app.initialize()
+    
+    # Перша перевірка одразу
     await check_new_items(app)
+    
+    # Повторювати кожні 120 секунд
+    job_queue = app.job_queue
+    job_queue.run_repeating(lambda _: asyncio.create_task(check_new_items(app)), interval=120, first=120)
+    
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.idle()
 
-    # Перевірка кожні 2 хвилини
-    while True:
-        await asyncio.sleep(CHECK_INTERVAL)
-        await check_new_items(app)
-
-# ----- Запуск -----
 if __name__ == "__main__":
     asyncio.run(main())
+    
