@@ -1,29 +1,75 @@
-# Базовий образ з Python 3.13
-FROM python:3.13-slim
+import time
+import telebot
+from bs4 import BeautifulSoup
+import undetected_chromedriver as uc
 
-# Встановлюємо потрібні пакети для Chrome
-RUN apt-get update && apt-get install -y \
-    wget unzip xvfb gnupg2 curl ca-certificates \
-    fonts-liberation libnss3 libx11-xcb1 libxcomposite1 libxrandr2 libxi6 libgtk-3-0 libxss1 \
-    && rm -rf /var/lib/apt/lists/*
+# =================== Налаштування ===================
+TOKEN = "тут_твій_токен_бота"
+CHAT_ID = "твоє_число_ID"
+bot = telebot.TeleBot(TOKEN)
 
-# Встановлюємо Google Chrome stable
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
+brands = ["uniqlo", "cos", "arket"]  # бренди, за якими шукаємо
+sent_links = set()  # щоб не надсилати дублікати
 
-# Створюємо робочу директорію
-WORKDIR /app
+bot.send_message(CHAT_ID, "Бот запустився і ловитиме нові товари <2000 грн")
 
-# Копіюємо файли
-COPY requirements.txt .
-COPY main.py .
+# =================== Headless Chrome ===================
+options = uc.ChromeOptions()
+options.headless = True
+options.add_argument("--no-sandbox")
+options.add_argument("--disable-dev-shm-usage")
+driver = uc.Chrome(options=options)
 
-# Встановлюємо Python пакети
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+# =================== Функція перевірки ===================
+def check_items():
+    for brand in brands:
+        url = f"https://shafa.ua/uk/clothes?search={brand}"
+        driver.get(url)
+        time.sleep(5)  # чекаємо, поки JS підвантажить товари
 
-# Запуск бота
-CMD ["python", "main.py"]
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        product_cards = soup.find_all("div", {"data-testid": "ProductCard"})
+
+        for card in product_cards:
+            a_tag = card.find("a", href=True)
+            if not a_tag:
+                continue
+            full_link = "https://shafa.ua" + a_tag["href"]
+            if full_link in sent_links:
+                continue
+
+            # Назва
+            title_tag = card.find("div", {"data-testid": "ProductTitle"})
+            title = title_tag.get_text() if title_tag else "Назва відсутня"
+
+            # Ціна
+            price_tag = card.find("div", {"data-testid": "Price"})
+            if not price_tag:
+                continue
+            price_text = price_tag.get_text().replace("грн", "").replace(" ", "")
+            try:
+                price = int(price_text)
+            except:
+                continue
+            if price > 2000:
+                continue
+
+            # Фото
+            img_tag = card.find("img")
+            img_url = img_tag["src"] if img_tag else None
+
+            msg = f"{brand.upper()} | {title} | {price} грн\n{full_link}"
+            if img_url:
+                bot.send_photo(CHAT_ID, img_url, caption=msg)
+            else:
+                bot.send_message(CHAT_ID, msg)
+
+            sent_links.add(full_link)
+
+# =================== Цикл перевірки ===================
+while True:
+    try:
+        check_items()
+    except Exception as e:
+        print("Помилка:", e)
+    time.sleep(30)  # перевірка кожні 30 секунд
