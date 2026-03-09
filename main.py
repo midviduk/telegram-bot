@@ -1,42 +1,52 @@
-import requests
-from bs4 import BeautifulSoup
-import telebot
-import os
 import time
+import telebot
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
 
-TOKEN = os.environ.get("TOKEN")
-CHAT_ID = os.environ.get("CHAT_ID")
-
+TOKEN = "тут_твій_токен_бота"
+CHAT_ID = "твоє_число_ID"
 bot = telebot.TeleBot(TOKEN)
-sent_links = set()
-headers = {"User-Agent": "Mozilla/5.0"}
+
 brands = ["uniqlo", "cos", "arket"]
+sent_links = set()
 
 bot.send_message(CHAT_ID, "Бот запустився і ловитиме нові товари <2000 грн")
+
+# Налаштування headless Chrome
+chrome_options = Options()
+chrome_options.add_argument("--headless=new")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--disable-gpu")
+chrome_options.add_argument("--window-size=1920,1080")
+
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
 
 def check_items():
     for brand in brands:
         url = f"https://shafa.ua/uk/clothes?search={brand}"
-        r = requests.get(url, headers=headers)
-        soup = BeautifulSoup(r.text, "html.parser")
+        driver.get(url)
+        time.sleep(5)  # чекаємо підвантаження JS
 
+        soup = BeautifulSoup(driver.page_source, "html.parser")
         product_cards = soup.find_all("div", {"data-testid": "ProductCard"})
 
         for card in product_cards:
-            # посилання
             a_tag = card.find("a", href=True)
             if not a_tag:
                 continue
             full_link = "https://shafa.ua" + a_tag["href"]
-
             if full_link in sent_links:
                 continue
 
-            # назва
+            # Назва
             title_tag = card.find("div", {"data-testid": "ProductTitle"})
             title = title_tag.get_text() if title_tag else "Назва відсутня"
 
-            # ціна
+            # Ціна
             price_tag = card.find("div", {"data-testid": "Price"})
             if not price_tag:
                 continue
@@ -45,18 +55,14 @@ def check_items():
                 price = int(price_text)
             except:
                 continue
-
             if price > 2000:
                 continue
 
-            # фото
+            # Фото
             img_tag = card.find("img")
             img_url = img_tag["src"] if img_tag else None
 
-            # формуємо повідомлення
             msg = f"{brand.upper()} | {title} | {price} грн\n{full_link}"
-
-            # надсилаємо
             if img_url:
                 bot.send_photo(CHAT_ID, img_url, caption=msg)
             else:
