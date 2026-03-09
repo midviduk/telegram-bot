@@ -4,7 +4,7 @@ from telegram import Bot, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # Твій Telegram токен
-TOKEN = 8206782935:AAEk10Lu_RbcyHrPgNA5OWuUJbL7jgcgjvE
+TOKEN = "8206782935:AAEk10Lu_RbcyHrPgNA5OWuUJbL7jgcgjvE"
 
 
 # Базова URL Shafa
