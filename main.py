@@ -8,12 +8,11 @@ TOKEN = os.environ.get("TOKEN")
 CHAT_ID = os.environ.get("CHAT_ID")
 
 bot = telebot.TeleBot(TOKEN)
-brands = ["uniqlo", "cos", "arket"]
 sent_links = set()
-
 headers = {"User-Agent": "Mozilla/5.0"}
+brands = ["uniqlo", "cos", "arket"]
 
-bot.send_message(CHAT_ID, "Бот запустився і буде надсилати нові товари <2000 грн")
+bot.send_message(CHAT_ID, "Бот запустився і ловитиме нові товари <2000 грн")
 
 def check_items():
     for brand in brands:
@@ -21,26 +20,34 @@ def check_items():
         r = requests.get(url, headers=headers)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # знаходимо всі посилання на товари
-        items = soup.find_all("a", href=True)
+        # знайдемо всі карточки товарів
+        product_cards = soup.find_all("div", {"data-testid": "ProductCard"})
 
-        for item in items:
-            link = item["href"]
+        for card in product_cards:
+            # посилання
+            a_tag = card.find("a", href=True)
+            if not a_tag:
+                continue
+            full_link = "https://shafa.ua" + a_tag["href"]
 
-            if "/uk/" in link and brand in link:
-                full_link = "https://shafa.ua" + link
+            # ціна
+            price_tag = card.find("div", {"data-testid": "Price"})
+            if not price_tag:
+                continue
+            price_text = price_tag.get_text().replace("грн", "").replace(" ", "")
+            try:
+                price = int(price_text)
+            except:
+                continue
 
-                # надсилаємо лише нові посилання
-                if full_link not in sent_links:
-                    bot.send_message(
-                        CHAT_ID,
-                        f"{brand.upper()} знайдено\n{full_link}"
-                    )
-                    sent_links.add(full_link)
+            if price < 2000 and full_link not in sent_links:
+                bot.send_message(CHAT_ID, f"{brand.upper()} {price} грн\n{full_link}")
+                sent_links.add(full_link)
 
 while True:
     try:
         check_items()
     except Exception as e:
         print(e)
-    time.sleep(300)  # перевірка кожні 5 хвилин
+    time.sleep(300)
+    
