@@ -20,7 +20,6 @@ def check_items():
         r = requests.get(url, headers=headers)
         soup = BeautifulSoup(r.text, "html.parser")
 
-        # знайдемо всі карточки товарів
         product_cards = soup.find_all("div", {"data-testid": "ProductCard"})
 
         for card in product_cards:
@@ -29,6 +28,13 @@ def check_items():
             if not a_tag:
                 continue
             full_link = "https://shafa.ua" + a_tag["href"]
+
+            if full_link in sent_links:
+                continue
+
+            # назва
+            title_tag = card.find("div", {"data-testid": "ProductTitle"})
+            title = title_tag.get_text() if title_tag else "Назва відсутня"
 
             # ціна
             price_tag = card.find("div", {"data-testid": "Price"})
@@ -40,14 +46,27 @@ def check_items():
             except:
                 continue
 
-            if price < 2000 and full_link not in sent_links:
-                bot.send_message(CHAT_ID, f"{brand.upper()} {price} грн\n{full_link}")
-                sent_links.add(full_link)
+            if price > 2000:
+                continue
+
+            # фото
+            img_tag = card.find("img")
+            img_url = img_tag["src"] if img_tag else None
+
+            # формуємо повідомлення
+            msg = f"{brand.upper()} | {title} | {price} грн\n{full_link}"
+
+            # надсилаємо
+            if img_url:
+                bot.send_photo(CHAT_ID, img_url, caption=msg)
+            else:
+                bot.send_message(CHAT_ID, msg)
+
+            sent_links.add(full_link)
 
 while True:
     try:
         check_items()
     except Exception as e:
-        print(e)
-    time.sleep(300)
-    
+        print("Помилка:", e)
+    time.sleep(30)  # перевірка кожні 30 секунд
