@@ -4,7 +4,8 @@ from telegram import Bot
 from telegram.ext import Application, ApplicationBuilder
 import requests
 from bs4 import BeautifulSoup
-
+import os
+print("TELEGRAM_TOKEN in env:", os.environ.get('TELEGRAM_TOKEN'))
 # Telegram
 TOKEN = os.environ['TELEGRAM_TOKEN']
 CHAT_ID = int(os.environ['CHAT_ID'])
