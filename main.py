@@ -4,7 +4,8 @@ from telegram import Bot, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # Твій Telegram токен
-TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+TOKEN = 8206782935:AAEk10Lu_RbcyHrPgNA5OWuUJbL7jgcgjvE
+
 
 # Базова URL Shafa
 BASE_URL = "https://shafa.ua/search?search_text={query}&brand_name=Uniqlo"
