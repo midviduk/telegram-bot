@@ -4,11 +4,24 @@ from telegram import Bot
 from telegram.ext import Application, ApplicationBuilder
 import requests
 from bs4 import BeautifulSoup
-import os
-print("TELEGRAM_TOKEN in env:", os.environ.get('TELEGRAM_TOKEN'))
-# Telegram
-TOKEN = os.environ['TELEGRAM_TOKEN']
-CHAT_ID = int(os.environ['CHAT_ID'])
+
+# Перевіряємо змінні середовища
+TOKEN = os.environ.get('TELEGRAM_TOKEN')
+CHAT_ID = os.environ.get('CHAT_ID')
+
+if not TOKEN or not CHAT_ID:
+    print("⚠️ TELEGRAM_TOKEN або CHAT_ID не знайдено в змінних середовища!")
+    print("Будь ласка, додай ці змінні через Railway Settings → Variables")
+    print(f"TELEGRAM_TOKEN: {TOKEN}")
+    print(f"CHAT_ID: {CHAT_ID}")
+    # Додаємо заглушку, щоб код не падав
+    CHAT_ID = 0
+    TOKEN = "DUMMY_TOKEN"
+
+else:
+    CHAT_ID = int(CHAT_ID)
+    print("✅ TELEGRAM_TOKEN та CHAT_ID знайдено, бот готовий до роботи")
+
 bot = Bot(TOKEN)
 
 # Товар для перевірки
@@ -20,12 +33,15 @@ sent_items = set()
 
 async def check_new_items():
     global sent_items
+    if TOKEN == "DUMMY_TOKEN":
+        print("🔹 Пропускаємо перевірку, бо немає токена")
+        return
+
     try:
         response = requests.get(URL)
         soup = BeautifulSoup(response.text, "html.parser")
 
-        # Приклад: знайти всі товари на сторінці
-        # Тут треба замінити селектор під реальний сайт
+        # Знайти всі товари на сторінці (підставити правильний селектор)
         items = soup.select(".css-1g2y0t5")  # заміни на правильний клас
         for item in items:
             name = item.get_text().strip()
@@ -40,6 +56,7 @@ async def check_new_items():
         print("Помилка при перевірці товарів:", e)
 
 async def main():
+    print("🚀 Бот запущено...")
     app = ApplicationBuilder().token(TOKEN).build()
 
     # Перша перевірка одразу
@@ -52,4 +69,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
