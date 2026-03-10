@@ -5,18 +5,14 @@ from telegram.ext import Application, ApplicationBuilder
 import requests
 from bs4 import BeautifulSoup
 
-# Перевірка, чи токен і чат_id встановлені
-print("TELEGRAM_TOKEN in env:", os.environ.get('TELEGRAM_TOKEN'))
-print("CHAT_ID in env:", os.environ.get('CHAT_ID'))
-
 # Telegram
 TOKEN = os.environ['TELEGRAM_TOKEN']
 CHAT_ID = int(os.environ['CHAT_ID'])
 bot = Bot(TOKEN)
 
-# Бренд та сторінка для перевірки
+# Бренд для перевірки
 BRAND = "H&M"
-URL = "https://shafa.ua/brand/hm"  # сторінка H&M
+URL = "https://shafa.ua/brand/h-m"  # приклад сторінки бренду
 
 # Щоб не надсилати повторно
 sent_items = set()
@@ -27,8 +23,8 @@ async def check_new_items():
         response = requests.get(URL)
         soup = BeautifulSoup(response.text, "html.parser")
 
-        # Знаходимо всі товари на сторінці
-        items = soup.select(".css-1g2y0t5")  # заміни на правильний клас, якщо треба
+        # Знайти всі товари на сторінці (підправити селектор під реальний сайт)
+        items = soup.select(".css-1g2y0t5")  # заміни на правильний клас для товарів
         for item in items:
             name = item.get_text().strip()
             link_tag = item.find("a")
@@ -47,7 +43,11 @@ async def main():
     # Перша перевірка одразу
     await check_new_items()
 
-    # Повторювати кожні 2 хвилини
+    # Вступне повідомлення, що бот працює
+    await bot.send_message(CHAT_ID, f"Бот запущено і готовий шукати {BRAND} 🛍️")
+    print(f"Вступне повідомлення надіслано: Бот запущено і готовий шукати {BRAND}")
+
+    # Повторювати перевірку кожні 2 хвилини
     while True:
         await asyncio.sleep(120)
         await check_new_items()
