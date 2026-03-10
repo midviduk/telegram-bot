@@ -1,67 +1,53 @@
 import os
 import asyncio
 from telegram import Bot
-from telegram.ext import Application, ApplicationBuilder
+from telegram.ext import ApplicationBuilder
 import requests
 from bs4 import BeautifulSoup
 
-# Перевіряємо змінні середовища
+# Лог, щоб перевірити токени
+print("TELEGRAM_TOKEN in env:", os.environ.get('TELEGRAM_TOKEN'))
+print("CHAT_ID in env:", os.environ.get('CHAT_ID'))
+
+# Перевірка токена і чату
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 
 if not TOKEN or not CHAT_ID:
-    print("⚠️ TELEGRAM_TOKEN або CHAT_ID не знайдено в змінних середовища!")
-    print("Будь ласка, додай ці змінні через Railway Settings → Variables")
-    print(f"TELEGRAM_TOKEN: {TOKEN}")
-    print(f"CHAT_ID: {CHAT_ID}")
-    # Додаємо заглушку, щоб код не падав
-    CHAT_ID = 0
-    TOKEN = "DUMMY_TOKEN"
+    print("Помилка: TELEGRAM_TOKEN або CHAT_ID не встановлені у змінних середовища!")
+    exit(1)
 
-else:
-    CHAT_ID = int(CHAT_ID)
-    print("✅ TELEGRAM_TOKEN та CHAT_ID знайдено, бот готовий до роботи")
-
+CHAT_ID = int(CHAT_ID)
 bot = Bot(TOKEN)
 
-# Товар для перевірки
+# Налаштування
 BRAND = "Uniqlo"
-URL = "https://shafa.ua/brand/uniqlo"  # приклад сторінки бренду
-
-# Щоб не надсилати повторно
+URL = "https://shafa.ua/brand/uniqlo"
 sent_items = set()
 
 async def check_new_items():
     global sent_items
-    if TOKEN == "DUMMY_TOKEN":
-        print("🔹 Пропускаємо перевірку, бо немає токена")
-        return
-
     try:
         response = requests.get(URL)
         soup = BeautifulSoup(response.text, "html.parser")
 
-        # Знайти всі товари на сторінці (підставити правильний селектор)
-        items = soup.select(".css-1g2y0t5")  # заміни на правильний клас
+        # Знайти товари на сторінці — заміни на реальний клас сайту
+        items = soup.select(".css-1g2y0t5")  
         for item in items:
             name = item.get_text().strip()
             link_tag = item.find("a")
             link = "https://shafa.ua" + link_tag["href"] if link_tag else ""
-            if name not in sent_items:
+            if name not in sent_items and BRAND.lower() in name.lower():
                 sent_items.add(name)
-                if BRAND.lower() in name.lower():
-                    await bot.send_message(CHAT_ID, f"Знайдено новий товар {BRAND}: {name}\n{link}")
-                    print(f"Надіслано: {name} — {link}")
+                await bot.send_message(CHAT_ID, f"Знайдено новий товар {BRAND}: {name}\n{link}")
+                print(f"Надіслано: {name} — {link}")
     except Exception as e:
         print("Помилка при перевірці товарів:", e)
 
 async def main():
-    print("🚀 Бот запущено...")
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    # Перша перевірка одразу
+    print("Бот запущено...")
+    # Перша перевірка відразу
     await check_new_items()
-
     # Повторювати кожні 2 хвилини
     while True:
         await asyncio.sleep(120)
