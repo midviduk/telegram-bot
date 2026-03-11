@@ -3,17 +3,16 @@ import asyncio
 import requests
 from bs4 import BeautifulSoup
 from telegram import Bot
-from telegram.ext import ApplicationBuilder
 
-TOKEN = os.environ['TELEGRAM_TOKEN']
-CHAT_ID = int(os.environ['CHAT_ID'])
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
+CHAT_ID = int(os.environ.get("CHAT_ID"))
 
 bot = Bot(TOKEN)
 
-BRAND = "h&m"
 URL = "https://shafa.ua/uk/brand/hm"
 
 sent_links = set()
+
 
 def get_items():
     response = requests.get(URL)
@@ -21,10 +20,12 @@ def get_items():
 
     items = []
 
-    for a in soup.select("a[href*='/uk/']"):
-        href = a.get("href")
+    for a in soup.find_all("a", href=True):
 
-        if "/uk/" in href and "/item/" in href:
+        href = a["href"]
+
+        if "/item/" in href:
+
             link = "https://shafa.ua" + href
             name = a.get_text(strip=True)
 
@@ -34,7 +35,9 @@ def get_items():
     return items
 
 
-async def check_new_items():
+async def check_items():
+
+    print("🔎 Перевіряю нові товари...")
 
     items = await asyncio.to_thread(get_items)
 
@@ -44,27 +47,32 @@ async def check_new_items():
 
             sent_links.add(link)
 
-            if BRAND in name.lower():
+            print("Знайдено:", name)
 
-                await bot.send_message(
-                    CHAT_ID,
-                    f"🛍 Новий H&M на Shafa\n\n{name}\n{link}"
-                )
+            await bot.send_message(
+                CHAT_ID,
+                f"🛍 Новий H&M\n\n{name}\n{link}"
+            )
 
 
 async def main():
 
-    app = ApplicationBuilder().token(TOKEN).build()
+    print("🚀 Бот запускається")
 
     await bot.send_message(CHAT_ID, "✅ Бот запущено і шукає H&M")
 
     while True:
 
-        await check_new_items()
+        try:
+
+            await check_items()
+
+        except Exception as e:
+
+            print("❌ Помилка:", e)
 
         await asyncio.sleep(120)
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-    
